@@ -39,7 +39,7 @@ func createRateLimiter() *limiter.Limiter {
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	apiKey := os.Getenv("GOOGLE_MAPS_API_KEY")
 	if apiKey == "" {
-		http.Error(w, "API key not found", http.StatusInternalServerError)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -53,25 +53,29 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	url := fmt.Sprintf("%s%s&key=%s", googleMapsBaseURL, r.URL.Path[1:], apiKey)
 	resp, err := http.Get(url)
 	if err != nil {
-		http.Error(w, "Error fetching data from Google Maps API", http.StatusInternalServerError)
+		http.Error(w, "Error fetching data from external API", http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		http.Error(w, "Error reading Google Maps API response, might be missing correct inputs", http.StatusInternalServerError)
+		http.Error(w, "Error reading external API response", http.StatusInternalServerError)
 		return
 	}
 
-	// Check for errors in the API response
 	if resp.StatusCode != http.StatusOK {
-		var apiError map[string]interface{}
-		if err := json.Unmarshal(body, &apiError); err != nil {
-			http.Error(w, "Error processing Google Maps API response", http.StatusInternalServerError)
-			return
-		}
-		errorMessage := "An error occurred while processing the request"
-		if status, ok := apiError["status"]; ok {
-			errorMessage = fmt.Sprintf("%s: %s", status, apiError["error_message"])
-		}
+		log.Printf("Error from external API: %s", string(body))
+		http.Error(w, "External API returned an error", resp.StatusCode)
+		return
+	}
+
+	requestCache.Set(cacheKey, string(body), cache.DefaultExpiration)
+
+	for k, v := range resp.Header {
+		w.Header().Set(k, v[0])
+	}
+
+	w.WriteHeader(resp.StatusCode)
+	w.Write(body)
+}
