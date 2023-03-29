@@ -66,7 +66,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Error from external API: %s", string(body))
-		http.Error(w, "External API returned an error", resp.StatusCode)
+		http.Error(w, "External API returned an error, might be missing inputs", resp.StatusCode)
 		return
 	}
 
