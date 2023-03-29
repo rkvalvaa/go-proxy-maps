@@ -60,16 +60,18 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		http.Error(w, "Error reading Google Maps API response", http.StatusInternalServerError)
+		http.Error(w, "Error reading Google Maps API response, might be missing correct inputs", http.StatusInternalServerError)
 		return
 	}
 
-	requestCache.Set(cacheKey, string(body), cache.DefaultExpiration)
-
-	for k, v := range resp.Header {
-		w.Header().Set(k, v[0])
-	}
-
-	w.WriteHeader(resp.StatusCode)
-	w.Write(body)
-}
+	// Check for errors in the API response
+	if resp.StatusCode != http.StatusOK {
+		var apiError map[string]interface{}
+		if err := json.Unmarshal(body, &apiError); err != nil {
+			http.Error(w, "Error processing Google Maps API response", http.StatusInternalServerError)
+			return
+		}
+		errorMessage := "An error occurred while processing the request"
+		if status, ok := apiError["status"]; ok {
+			errorMessage = fmt.Sprintf("%s: %s", status, apiError["error_message"])
+		}
